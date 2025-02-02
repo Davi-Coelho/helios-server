@@ -1,4 +1,4 @@
-node('jenkins_sites') {
+node {
 
     def helios
 
