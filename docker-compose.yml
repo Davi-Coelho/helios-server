@@ -52,13 +52,13 @@ services:
     image: registry.davicoelho.com/sistemas/helios:${TAG}
     env_file:
       - .env
-    command: gunicorn wsgi:application -b 0.0.0.0:8000 -w 8
+    command: apache2ctl -D FOREGROUND
     depends_on:
       helios-db:
         condition: service_healthy
         restart: true
     expose:
-     - "8000"
+     - "80"
     labels:
      - "traefik.enable=true"
      - "traefik.http.routers.helios-server.rule=Host(`helios.davicoelho.com`)"
