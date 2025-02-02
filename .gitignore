@@ -10,3 +10,4 @@ celery*.log
 env.sh
 .cache
 .idea/
+.env

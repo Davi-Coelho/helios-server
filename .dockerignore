@@ -1,0 +1,7 @@
+docker/
+docker-compose.yml
+Dockerfile
+Jenkinsfile
+.env
+.dockerignore
+.gitignore

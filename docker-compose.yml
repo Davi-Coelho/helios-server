@@ -1,42 +1,83 @@
-version: '3'
-services: 
-    db:
-        image: postgres
-        env_file:
-            - .env
-        ports:
-            - "6432:5432"
-        volumes:
-            - ~/docker-volumes/heliosdb/pgdata:/var/lib/postgresql/data
-            - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql
-        networks:
-            - helios-network
-    helios:
-        build:
-            dockerfile: ./docker/Dockerfile
-            context: ./
-        command: python manage.py runserver 0.0.0.0:8000
-        depends_on:
-            - db
-        env_file:
-            - .env
-        environment:
-            - USER_ID=1000
-            - GROUP_ID=1000
-        ports:
-            - "80:80"
-            - "443:443"
-            - "8000:8000"
-        networks:
-            - helios-network
-        restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
-        stop_grace_period: "${DOCKER_STOP_GRACE_PERIOD:-3s}"
-        volumes:
-            - ./.:/var/www/helios-server
-            - ~/docker-volumes/heliosapp/apache-logs:/var/log/apache2
-            - ~/docker-volumes/heliosapp/celery-logs:/var/log/celery
-            - ~/docker-volumes/heliosapp/redis-logs:/var/log/redis
-            - ~/docker-volumes/heliosapp/supervisor-logs:/var/log/supervisor
+services:
+  helios-db:
+    container_name: helios-db
+    image: postgres:12.4
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helios -d helios"]
+      interval: 30s
+      retries: 5
+      start_period: 30s
+      timeout: 30s
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PWD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - helios-pgdata:/var/lib/postgresql/data/pgdata
+    networks:
+      - helios-network
+  helios-celery:
+    container_name: helios-celery
+    image: registry.davicoelho.com/sistemas/helios:${TAG}
+    env_file:
+      - .env
+    command: celery worker --app helios --events --beat --concurrency 8 --logfile celeryw.log --pidfile celeryw.pid
+    depends_on:
+      helios-db:
+        condition: service_healthy
+        restart: true
+      helios-rabbitmq:
+        condition: service_healthy
+        restart: true
+    networks:
+      - helios-network
+  helios-rabbitmq:
+    container_name: helios-rabbitmq
+    image: rabbitmq:3-management-alpine
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      retries: 5
+      start_period: 30s
+      timeout: 30s
+    volumes:
+      - helios-rabbitmq-data:/var/lib/rabbitmq/
+      - helios-rabbitmq-log:/var/log/rabbitmq
+    networks:
+      - helios-network
+  helios-server:
+    container_name: helios-server
+    image: registry.davicoelho.com/sistemas/helios:${TAG}
+    env_file:
+      - .env
+    command: gunicorn wsgi:application -b 0.0.0.0:8000 -w 8
+    depends_on:
+      helios-db:
+        condition: service_healthy
+        restart: true
+    expose:
+     - "8000"
+    labels:
+     - "traefik.enable=true"
+     - "traefik.http.routers.helios-server.rule=Host(`helios.davicoelho.com`)"
+     - "traefik.http.routers.helios-server.tls=true"
+     - "traefik.http.routers.helios-server.tls.certresolver=lets-encrypt"
+    networks:
+      - helios-network
+      - web
+
+volumes:
+  helios-pgdata:
+    name: helios-pgdata
+  helios-rabbitmq-data:
+    name: helios-rabbitmq-data
+  helios-rabbitmq-log:
+    name: helios-rabbitmq-log
+
 networks:
-    helios-network:
-        driver: bridge
+  web:
+    external: true
+  helios-network:
+    name: helios-network
