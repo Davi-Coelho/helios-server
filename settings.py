@@ -105,7 +105,7 @@ MEDIA_URL = ''
 # URL prefix for admin media -- CSS, JavaScript and images. Make sure to use a
 # trailing slash.
 # Examples: "http://foo.com/media/", "/media/".
-STATIC_URL = '/media/'
+STATIC_URL = '/static/helios/'
 
 STATIC_ROOT = ROOT_PATH + '/sitestatic'
 
